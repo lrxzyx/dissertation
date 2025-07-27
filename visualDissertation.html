@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>15-Minute City POI Cluster Map</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+
+    #menu {
+      position: absolute;
+      background: white;
+      padding: 10px;
+      font-family: sans-serif;
+      z-index: 1;
+      top: 10px;
+      left: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+  <div id="menu">
+    <label><input type="checkbox" id="supermarket-toggle" checked> Supermarkets</label><br>
+    <label><input type="checkbox" id="school-toggle" checked> Schools</label><br>
+    <label><input type="checkbox" id="park-toggle" checked> Parks</label><br>
+    <label><input type="checkbox" id="station-toggle" checked> Stations</label><br>
+    <label><input type="checkbox" id="gp-toggle" checked> GP Clinics</label>
+  </div>
+
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZGVhcnNoZXIiLCJhIjoiY202N3J6NGlrMDJtZTJrczhpMGc1dmRhZSJ9.tlP4ILEoUnANCuhvM0uIEg';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/dark-v10',
+      center: [-0.1, 51.5],
+      zoom: 9.5
+    });
+
+    map.on('load', () => {
+      // 加载 LSOA 边界
+      map.addSource('lsoa', {
+        type: 'geojson',
+        data: './LSOA_2011_London_gen_MHW.json'
+      });
+
+      map.addLayer({
+        id: 'lsoa-fill',
+        type: 'fill',
+        source: 'lsoa',
+        paint: {
+          'fill-color': '#f0f0f0',
+          'fill-opacity': 0.2
+        }
+      });
+
+      map.addLayer({
+        id: 'lsoa-outline',
+        type: 'line',
+        source: 'lsoa',
+        paint: {
+          'line-color': '#444',
+          'line-width': 1
+        }
+      });
+
+      // 统一颜色配置
+      const pois = [
+        { id: 'supermarket', file: './Supermarket + Convenience Store.geojson' },
+        { id: 'school', file: './School.geojson' },
+        { id: 'park', file: './Park.geojson' },
+        { id: 'station', file: './Train : Tube Station.geojson' },
+        { id: 'gp', file: './GP : Doctors.geojson' }
+      ];
+
+      const commonColor = '#4b6a94';
+
+      pois.forEach(poi => {
+        map.addSource(poi.id, {
+          type: 'geojson',
+          data: poi.file,
+          cluster: true,
+          clusterMaxZoom: 14,
+          clusterRadius: 60
+        });
+
+        // 聚合圆圈
+        map.addLayer({
+          id: `${poi.id}-clusters`,
+          type: 'circle',
+          source: poi.id,
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['get', 'point_count'],
+              1, 6,
+              20, 10,
+              50, 14,
+              100, 18,
+              300, 22,
+              700, 28,
+              1000, 32
+            ],
+            'circle-color': commonColor,
+            'circle-opacity': 0.6,
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#fff'
+          }
+        });
+
+        // 聚合数字
+        map.addLayer({
+          id: `${poi.id}-cluster-count`,
+          type: 'symbol',
+          source: poi.id,
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': '{point_count_abbreviated}',
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+            'text-size': 12
+          },
+          paint: {
+            'text-color': '#fff'
+          }
+        });
+
+        // 非聚合点
+        map.addLayer({
+          id: `${poi.id}-unclustered`,
+          type: 'circle',
+          source: poi.id,
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-radius': 5,
+            'circle-color': commonColor,
+            'circle-opacity': 0.6,
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#fff'
+          }
+        });
+
+        // 控制图层显隐
+        const checkbox = document.getElementById(`${poi.id}-toggle`);
+        checkbox.addEventListener('change', (e) => {
+          const visibility = e.target.checked ? 'visible' : 'none';
+          map.setLayoutProperty(`${poi.id}-clusters`, 'visibility', visibility);
+          map.setLayoutProperty(`${poi.id}-cluster-count`, 'visibility', visibility);
+          map.setLayoutProperty(`${poi.id}-unclustered`, 'visibility', visibility);
+        });
+      });
+    });
+  </script>
+</body>
+
+</html>
